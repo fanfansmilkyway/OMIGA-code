@@ -19,11 +19,9 @@ def contact():
 
 @app.route('/lessons', methods=['POST'])
 def contact_post():
-    if request.form['submit_button'] == 'Do Something':
+    if request.form['submit_button'] == '第一课：OMIGA语言的简介与导入':
         return render_template('第一课：OMIGA语言的简介与导入.html')
-    elif request.form['submit_button'] == 'Do Something Else':
-        pass # do something else
     else:
-        pass # unknow
+        pass
 
 app.run(host='0.0.0.0',port='80')
