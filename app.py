@@ -54,4 +54,4 @@ def upload_file():
             return redirect(url_for('upload_file', name=filename))
     return render_template('uploads.html')
 
-app.run(host='0.0.0.0',port='80',debug=True)
+app.run(host='0.0.0.0',port='80')
