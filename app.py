@@ -30,6 +30,7 @@ def allowed_file(filename):
         return '.' in filename and \
         filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# set environment variable to your folder's path
 UPLOAD_FOLDER = os.environ['UPLOAD_DIR']
 ALLOWED_EXTENSIONS = {'txt','png','jpg','jpeg','gif','mp3','mp4'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
