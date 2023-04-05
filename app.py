@@ -1,14 +1,28 @@
-from flask import Flask, request, render_template, flash, redirect, url_for
+from flask import Flask, request, render_template, flash, redirect, url_for, session
 import os
 from werkzeug.utils import secure_filename
-        
+import duckdb
+
 app = Flask(__name__)
+
+app.secret_key = 'q776NkmVYq3vjZwaJn9drw'
+
+#Environment Variables
+UPLOAD_FOLDER = os.environ['UPLOAD_DIR']
+USER_DATA = os.environ['USER_DATA_DIR']
+
+con = duckdb.connect("{0}/userdata.db".format(USER_DATA))
+
+try:
+    con.sql("CREATE TABLE users(ID int, Name varchar(255), Password varchar(255), Number varchar(255))")
+except:
+    pass
 
 @app.route('/', methods=['GET','POST'])
 def my_form_post():
     if request.method == 'POST':
         text = request.form['text']
-        return render_template('%s.html' %(text))
+        return render_template('%s.html' %(text), UPLOAD_FOLDER)
     return render_template('index.html')
     
 @app.route('/lessons', methods=['GET','POST'])
@@ -30,8 +44,6 @@ def allowed_file(filename):
         return '.' in filename and \
         filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# set environment variable to your folder's path
-UPLOAD_FOLDER = os.environ['UPLOAD_DIR']
 ALLOWED_EXTENSIONS = {'txt','png','jpg','jpeg','gif','mp3','mp4'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 20 * 1000 * 1000
@@ -55,4 +67,54 @@ def upload_file():
             return redirect(url_for('upload_file', name=filename))
     return render_template('uploads.html')
 
+@app.route('/sign_up', methods=['GET','POST'])
+def sign_up():
+    if request.method == 'POST':
+        user_name = request.form['user_name']
+        password = request.form['password']
+        try:
+            con.sql("INSERT INTO users (ID, Name, Password, Number) VALUES ('0', '{0}', '{1}', '0')".\
+                format(user_name, password))
+            return '<h1>Successfully created account</h1>'
+        except:
+            return '<h1>This username is already taken</h1>'
+    return render_template('sign_up.html')
+
+@app.route('/sign_in', methods=['GET','POST'])
+def sign_in():
+    if request.method == 'POST':
+        user_name = request.form['user_name']
+        password = str(request.form['password'])
+        try:
+            real_password = con.sql("SELECT Password FROM users WHERE Name='{0}'".\
+                format(user_name)).df()
+            real_password = str(real_password['Password'][0])
+        except:
+            return '<h1>This user does not exist</h1>'
+        if password == real_password:
+            session['username'] = user_name
+            return redirect('/users')
+        else:
+            return 'The password is WRONG!'
+
+    return render_template('sign_in.html')
+            
+@app.route('/users', methods=['GET','POST'])
+def users():
+    number = 0
+    try:
+        session['username']
+    except:
+        return redirect('sign_in')
+    if session['username'] != 'GUEST':
+        number = con.sql("SELECT Number FROM users WHERE Name='{0}'".format(session['username'])).df()
+        number = str(number['Number'][0])
+    
+    if request.method == 'POST':
+        new_number = request.form['number']
+        con.sql("UPDATE users SET number={0} WHERE Name='{1}'".format(new_number, session['username']))
+        return 'Change the number successfully'
+
+    return render_template('users.html', user_name=session['username'], num=number)
+    
 app.run(host='0.0.0.0',port='80')
