@@ -14,15 +14,26 @@ USER_DATA = os.environ['USER_DATA_DIR']
 con = duckdb.connect("{0}/userdata.db".format(USER_DATA))
 
 try:
-    con.sql("CREATE TABLE users(ID int, Name varchar(255), Password varchar(255), Number varchar(255))")
+    con.sql("CREATE TABLE users(Id int primary key, Name varchar(255), Password varchar(255), Number varchar(255))")
+    con.sql("CREATE SEQUENCE seq_id START 1")
 except:
     pass
 
+CANT_VISIT = ['fix','index','lessons','sign_in','sign_up','uploads','users']
 @app.route('/', methods=['GET','POST'])
 def my_form_post():
     if request.method == 'POST':
-        text = request.form['text']
-        return render_template('%s.html' %(text), UPLOAD_FOLDER)
+        session['text'] = request.form['text']
+        if session['text'] in CANT_VISIT:
+            return '''
+                <h1>DON'T VISIT THE FOLLOWING PAGES:
+                <h2>fix, index, lessons, sign_in, sign_up, uploads, users</h2>
+                    '''
+        try:
+            return render_template('%s.html' %(session['text']))
+        except:
+            return "<h1>Word not found, please change one</h1>" 
+            
     return render_template('index.html')
     
 @app.route('/lessons', methods=['GET','POST'])
@@ -72,11 +83,11 @@ def sign_up():
     if request.method == 'POST':
         user_name = request.form['user_name']
         password = request.form['password']
-        try:
-            con.sql("INSERT INTO users (ID, Name, Password, Number) VALUES ('0', '{0}', '{1}', '0')".\
-                format(user_name, password))
+        # Check if the user exists
+        if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (False,):
+            con.sql("INSERT INTO users (Id, Name, Password, Number) VALUES (nextval('seq_id'), '{0}', '{1}', '0')".format(user_name, password))
             return '<h1>Successfully created account</h1>'
-        except:
+        if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (True,):
             return '<h1>This username is already taken</h1>'
     return render_template('sign_up.html')
 
@@ -85,36 +96,42 @@ def sign_in():
     if request.method == 'POST':
         user_name = request.form['user_name']
         password = str(request.form['password'])
-        try:
+        # Check if the user exists
+        if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (False,):
             real_password = con.sql("SELECT Password FROM users WHERE Name='{0}'".\
                 format(user_name)).df()
             real_password = str(real_password['Password'][0])
-        except:
-            return '<h1>This user does not exist</h1>'
+        if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (True,):
+            return '<h1>This user does not exist</h1>'    # Break
+        # Check if the password is correct
         if password == real_password:
             session['username'] = user_name
             return redirect('/users')
         else:
-            return 'The password is WRONG!'
+            return '<h1>The password is WRONG!</h1>'
 
     return render_template('sign_in.html')
             
 @app.route('/users', methods=['GET','POST'])
 def users():
-    number = 0
+    # Check if the user sign in
     try:
         session['username']
     except:
-        return redirect('sign_in')
-    if session['username'] != 'GUEST':
+        # If not, redirect to /sign_in to sign in 
+        return redirect('/sign_in')
+    else:
+        # If yes, show the user page
         number = con.sql("SELECT Number FROM users WHERE Name='{0}'".format(session['username'])).df()
         number = str(number['Number'][0])
     
+    # Change the number
     if request.method == 'POST':
         new_number = request.form['number']
         con.sql("UPDATE users SET number={0} WHERE Name='{1}'".format(new_number, session['username']))
-        return 'Change the number successfully'
+        return '<h1>Change the number successfully</h1>'
 
     return render_template('users.html', user_name=session['username'], num=number)
-    
+
+# Don't open debug mode
 app.run(host='0.0.0.0',port='80')
