@@ -33,7 +33,7 @@ def my_form_post():
             return render_template('%s.html' %(session['text']))
         except:
             return "<h1>Word not found, please change one</h1>" 
-            
+
     return render_template('index.html')
     
 @app.route('/lessons', methods=['GET','POST'])
@@ -97,11 +97,11 @@ def sign_in():
         user_name = request.form['user_name']
         password = str(request.form['password'])
         # Check if the user exists
-        if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (False,):
+        if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (True,):
             real_password = con.sql("SELECT Password FROM users WHERE Name='{0}'".\
                 format(user_name)).df()
             real_password = str(real_password['Password'][0])
-        if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (True,):
+        if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (False,):
             return '<h1>This user does not exist</h1>'    # Break
         # Check if the password is correct
         if password == real_password:
