@@ -4,13 +4,13 @@ from werkzeug.utils import secure_filename
 import duckdb
 from git import Repo
 
-app = Flask(__name__, template_folder='/Users/yuan/OMIGA-content/templates', static_folder='/Users/yuan/OMIGA-content/static')
-
-app.secret_key = 'q776NkmVYq3vjZwaJn9drw'
-
 #Environment Variables
 USER_DATA = os.environ['USER_DATA_DIR']
 CONTENT = os.environ['CONTENT_DIR']
+
+app = Flask(__name__, template_folder='{0}/templates'.format(CONTENT), static_folder='{0}/static'.format(CONTENT))
+
+app.secret_key = 'q776NkmVYq3vjZwaJn9drw'
 
 # Github
 os.system("git config --global user.name 'fanfansmilkyway'")
