@@ -2,15 +2,23 @@ from flask import Flask, request, render_template, flash, redirect, url_for, ses
 import os
 from werkzeug.utils import secure_filename
 import duckdb
+from git import Repo
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='/Users/yuan/OMIGA-content/templates', static_folder='/Users/yuan/OMIGA-content/static')
 
 app.secret_key = 'q776NkmVYq3vjZwaJn9drw'
 
 #Environment Variables
-UPLOAD_FOLDER = os.environ['UPLOAD_DIR']
 USER_DATA = os.environ['USER_DATA_DIR']
+CONTENT = os.environ['CONTENT_DIR']
 
+# Github
+os.system("git config --global user.name 'fanfansmilkyway'")
+os.system("git config --global user.email 'fanfansmilkyway@qq.com'")
+repo = Repo(CONTENT)
+g = repo.git
+
+# Database
 con = duckdb.connect("{0}/userdata.db".format(USER_DATA))
 
 try:
@@ -26,13 +34,13 @@ def my_form_post():
         session['text'] = request.form['text']
         if session['text'] in CANT_VISIT:
             return '''
-                <h1>DON'T VISIT THE FOLLOWING PAGES:
+                <h1>不要访问以下页面：</h1>
                 <h2>fix, index, lessons, sign_in, sign_up, uploads, users</h2>
                     '''
         try:
             return render_template('%s.html' %(session['text']))
         except:
-            return "<h1>Word not found, please change one</h1>" 
+            return "<h1>未找到此单词，请换一个</h1>" 
 
     return render_template('index.html')
     
@@ -55,27 +63,26 @@ def allowed_file(filename):
         return '.' in filename and \
         filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-ALLOWED_EXTENSIONS = {'txt','png','jpg','jpeg','gif','mp3','mp4'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 20 * 1000 * 1000
+ALLOWED_EXTENSIONS = {'html'}
+app.config['UPLOAD_FOLDER'] = CONTENT
+app.config['MAX_CONTENT_LENGTH'] = 20 * 1000 * 1000   # 20MB
 
 @app.route('/uploads', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
-        # check if the post request has the file part
-        if 'file' not in request.files:
-            flash('No file part')
-            return redirect(request.url)
-        file = request.files['file']
-        # If the user does not select a file, the browser submits an
-        # empty file without a filename.
-        if file.filename == '':
-            flash('No selected file')
-            return redirect(request.url)
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            return redirect(url_for('upload_file', name=filename))
+        session['title'] = str(request.form['title'])
+        session['content'] = request.form['content']
+        text = repr(str(session['content']))
+        text = text.replace('\\r\\n', '<br>')
+        text = text.replace("'", '')
+        f = open('{0}/templates/{1}.html'.format(CONTENT, session['title']), 'a')
+        f.write('{0}'.format('<h1>'+session['title']+'</h1>'))
+        f.write('{0}'.format(text))
+        f.close()
+        g.add("--all")
+        g.commit("-m auto update {0}".format(session['title']))
+        g.push()
+        return '<h1>成功添加单词</h1>'
     return render_template('uploads.html')
 
 @app.route('/sign_up', methods=['GET','POST'])
@@ -86,9 +93,9 @@ def sign_up():
         # Check if the user exists
         if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (False,):
             con.sql("INSERT INTO users (Id, Name, Password, Number) VALUES (nextval('seq_id'), '{0}', '{1}', '0')".format(user_name, password))
-            return '<h1>Successfully created account</h1>'
+            return '<h1>成功创建账户</h1>'
         if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (True,):
-            return '<h1>This username is already taken</h1>'
+            return '<h1>此用户名已经被使用</h1>'
     return render_template('sign_up.html')
 
 @app.route('/sign_in', methods=['GET','POST'])
@@ -102,13 +109,13 @@ def sign_in():
                 format(user_name)).df()
             real_password = str(real_password['Password'][0])
         if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (False,):
-            return '<h1>This user does not exist</h1>'    # Break
+            return '<h1>此用户不存在</h1>'    # Break
         # Check if the password is correct
         if password == real_password:
             session['username'] = user_name
             return redirect('/users')
         else:
-            return '<h1>The password is WRONG!</h1>'
+            return '<h1>密码错误</h1>'
 
     return render_template('sign_in.html')
             
@@ -129,7 +136,7 @@ def users():
     if request.method == 'POST':
         new_number = request.form['number']
         con.sql("UPDATE users SET number={0} WHERE Name='{1}'".format(new_number, session['username']))
-        return '<h1>Change the number successfully</h1>'
+        return '<h1>成功更改</h1>'
 
     return render_template('users.html', user_name=session['username'], num=number)
 
