@@ -2,21 +2,28 @@ from flask import Flask, request, render_template, flash, redirect, url_for, ses
 import os
 from werkzeug.utils import secure_filename
 import duckdb
-from git import Repo
+from git import Repo, GitConfigParser
 
 #Environment Variables
 USER_DATA = os.environ['USER_DATA_DIR']
 CONTENT = os.environ['CONTENT_DIR']
+IF_SERVER = os.environ['IF_SERVER'] # 0 or 1
 
 app = Flask(__name__, template_folder='{0}/templates'.format(CONTENT), static_folder='{0}/static'.format(CONTENT))
 
 app.secret_key = 'q776NkmVYq3vjZwaJn9drw'
 
 # Github
-os.system("git config --global user.name 'fanfansmilkyway'")
-os.system("git config --global user.email 'fanfansmilkyway@qq.com'")
-repo = Repo(CONTENT)
-g = repo.git
+if IF_SERVER == '1':
+    ssh_key_path = "/root/.ssh"
+    repo = Repo(CONTENT)
+    config = GitConfigParser(f"{CONTENT}/.git/config")
+    config.set_value("core", "sshCommand", f"ssh -i {ssh_key_path}")
+    with open(f"{CONTENT}/.git/config", "w") as f:
+        config.write(f)
+if IF_SERVER == '0':
+    repo = Repo(CONTENT)
+    g = repo.git
 
 # Database
 con = duckdb.connect("{0}/userdata.db".format(USER_DATA))
@@ -40,7 +47,7 @@ def my_form_post():
         try:
             return render_template('%s.html' %(session['text']))
         except:
-            return "<h1>未找到此单词，请换一个</h1>" 
+            return "<h1>未找到此单词</h1>" 
 
     return render_template('index.html')
     
@@ -80,7 +87,7 @@ def upload_file():
         f.write('{0}'.format(text))
         f.close()
         g.add("--all")
-        g.commit("-m auto update {0}".format(session['title']))
+        g.commit("-m add word {0} from server".format(session['title']))
         g.push()
         return '<h1>成功添加单词</h1>'
     return render_template('uploads.html')
