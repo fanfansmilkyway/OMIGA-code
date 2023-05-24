@@ -1,29 +1,17 @@
 from flask import Flask, request, render_template, flash, redirect, url_for, session
 import os
+import glob
+import jieba
 from werkzeug.utils import secure_filename
 import duckdb
-from git import Repo, GitConfigParser
 
 #Environment Variables
 USER_DATA = os.environ['USER_DATA_DIR']
 CONTENT = os.environ['CONTENT_DIR']
-IF_SERVER = os.environ['IF_SERVER'] # 0 or 1
 
 app = Flask(__name__, template_folder='{0}/templates'.format(CONTENT), static_folder='{0}/static'.format(CONTENT))
 
 app.secret_key = 'q776NkmVYq3vjZwaJn9drw'
-
-# Github
-if IF_SERVER == '1':
-    ssh_key_path = "/root/.ssh"
-    repo = Repo(CONTENT)
-    config = GitConfigParser(f"{CONTENT}/.git/config")
-    config.set_value("core", "sshCommand", f"ssh -i {ssh_key_path}")
-    with open(f"{CONTENT}/.git/config", "w") as f:
-        config.write(f)
-if IF_SERVER == '0':
-    repo = Repo(CONTENT)
-    g = repo.git
 
 # Database
 con = duckdb.connect("{0}/userdata.db".format(USER_DATA))
@@ -36,21 +24,55 @@ except:
 
 CANT_VISIT = ['fix','index','lessons','sign_in','sign_up','uploads','users']
 @app.route('/', methods=['GET','POST'])
-def my_form_post():
-    if request.method == 'POST':
-        session['text'] = request.form['text']
-        if session['text'] in CANT_VISIT:
-            return '''
-                <h1>不要访问以下页面：</h1>
-                <h2>fix, index, lessons, sign_in, sign_up, uploads, users</h2>
-                    '''
-        try:
-            return render_template('%s.html' %(session['text']))
-        except:
-            return "<h1>未找到此单词</h1>" 
-
+def my_form_post(): 
     return render_template('index.html')
     
+@app.route('/words', methods=['GET', 'POST'])
+def words():
+    if request.method == 'POST':
+        if request.form['submit_button'] == '用OMIGA语查找':
+            return redirect('/search-word-with-OMIGA')
+        if request.form['submit_button'] == '用中文查找':
+            return redirect('/search-word-with-chinese')
+    return render_template('words.html')
+    
+@app.route('/search-word-with-OMIGA', methods=['GET', 'POST'])
+def search_word_with_OMIGA():
+    if request.method == 'POST':
+        try:
+            session['word'] = request.form['word']
+            return render_template('{0}.html'.format(session['word']))
+        except:
+            return '未找到此单词'
+    return render_template('search-word-with-OMIGA.html')
+
+NOT_WORD = ['.DS_Store', '第一课：OMIGA语言的简介与导入.html', '第二课：OMIGA语言的基本词语与语句.html',\
+    '第三课：teriyoga! ditaiyosu! 你们好！初次见面！.html', '第四课：dv ing sihoma tsu loyode 班级中的规则.html',\
+    '第五课：noku, misu, kongmi 没有，一些，很多.html','fix.html','index.html','lessons.html','sign_in.html',\
+    'sign_up.html','uploads.html','users.html', 'search-word-with-chinese.html', 'search-word-with-OMIGA.html'\
+    ,'words.html']
+@app.route('/search-word-with-chinese', methods=['GET', 'POST'])
+def search_word_with_chinese():
+    if request.method == 'POST':
+        session['word'] = request.form['word']
+        list = []
+        for filename in os.listdir('/Users/yuan/OMIGA-content/templates'):
+            with open("{0}".format(filename), "r") as f:
+                if filename not in NOT_WORD:
+                    text = f.read()
+                    if session['word'] in text:
+                        list.append(filename)
+        list = [file_name[:-5] for file_name in list]
+        result = ', '.join(list)
+        if result != '':
+            return '''
+            <h1>找到以下可能的单词</h1>
+            <h3>{0}</h3>
+            '''.format(result)  
+        if result == '':
+            return '<h1>未找到单词'
+    return render_template('search-word-with-chinese.html')
+
 @app.route('/lessons', methods=['GET','POST'])
 def contact_post():
     if request.method == 'POST':
@@ -86,9 +108,6 @@ def upload_file():
         f.write('{0}'.format('<h1>'+session['title']+'</h1>'))
         f.write('{0}'.format(text))
         f.close()
-        g.add("--all")
-        g.commit("-m add word {0} from server".format(session['title']))
-        g.push()
         return '<h1>成功添加单词</h1>'
     return render_template('uploads.html')
 
