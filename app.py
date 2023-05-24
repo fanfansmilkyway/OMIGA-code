@@ -30,7 +30,7 @@ def my_form_post():
 @app.route('/words', methods=['GET', 'POST'])
 def words():
     if request.method == 'POST':
-        if request.form['submit_button'] == '用OMIGA语查找':
+        if request.form['submit_button'] == '直接查找':
             return redirect('/search-word-with-OMIGA')
         if request.form['submit_button'] == '用中文查找':
             return redirect('/search-word-with-chinese')
@@ -46,7 +46,7 @@ def search_word_with_OMIGA():
             return '未找到此单词'
     return render_template('search-word-with-OMIGA.html')
 
-NOT_WORD = ['.DS_Store', '第一课：OMIGA语言的简介与导入.html', '第二课：OMIGA语言的基本词语与语句.html',\
+NOT_WORD = ['.DS_Store', '.gitignore', '第一课：OMIGA语言的简介与导入.html', '第二课：OMIGA语言的基本词语与语句.html',\
     '第三课：teriyoga! ditaiyosu! 你们好！初次见面！.html', '第四课：dv ing sihoma tsu loyode 班级中的规则.html',\
     '第五课：noku, misu, kongmi 没有，一些，很多.html','fix.html','index.html','lessons.html','sign_in.html',\
     'sign_up.html','uploads.html','users.html', 'search-word-with-chinese.html', 'search-word-with-OMIGA.html'\
@@ -56,9 +56,9 @@ def search_word_with_chinese():
     if request.method == 'POST':
         session['word'] = request.form['word']
         list = []
-        for filename in os.listdir('/Users/yuan/OMIGA-content/templates'):
-            with open("{0}".format(filename), "r") as f:
-                if filename not in NOT_WORD:
+        for filename in os.listdir('{0}/templates'.format(CONTENT)):
+            if filename not in NOT_WORD:
+                with open("{0}".format(filename), "r") as f:
                     text = f.read()
                     if session['word'] in text:
                         list.append(filename)
