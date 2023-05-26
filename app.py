@@ -55,15 +55,15 @@ NOT_WORD = ['.DS_Store', '.gitignore', '第一课：OMIGA语言的简介与导�
 def search_word_with_chinese():
     if request.method == 'POST':
         session['word'] = request.form['word']
-        list = []
+        possible_words = []
         for filename in os.listdir('{0}/templates'.format(CONTENT)):
             if filename not in NOT_WORD:
-                with open("{0}".format(filename), "r") as f:
+                with open("{0}/templates/{1}".format(CONTENT, filename), "r") as f:
                     text = f.read()
-                    if session['word'] in text:
-                        list.append(filename)
-        list = [file_name[:-5] for file_name in list]
-        result = ', '.join(list)
+                    if '{0}'.format(session['word']) in list(jieba.cut_for_search(text)):
+                        possible_words.append(filename)
+        possible_words = [file_name[:-5] for file_name in possible_words]
+        result = ', '.join(possible_words)
         if result != '':
             return '''
             <h1>找到以下可能的单词</h1>
