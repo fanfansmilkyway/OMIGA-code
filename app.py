@@ -54,7 +54,7 @@ def search_word_with_OMIGA():
             return render_template('{0}.html'.format(session['word']))
         except:
             # If not, show error message
-            return '未找到此单词'
+            return '<h1>未找到此单词</h1>'
     return render_template('search-word-with-OMIGA.html')
 
 # These are not words
@@ -117,12 +117,16 @@ def upload_file():
         # Convert str to html files
         session['title'] = str(request.form['title'])
         session['content'] = request.form['content']
-        text = repr(str(session['content']))
+        text = '<h1>'+session['title']+'</h1>' + repr(str(session['content']))
         text = text.replace('\\r\\n', '<br>')
         text = text.replace("'", '')
+        text = '''<head>
+    <title>单词查询</title>
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+        ''' + text
         # Write html files
-        f = open('{0}/templates/{1}.html'.format(CONTENT, session['title']), 'a')
-        f.write('{0}'.format('<h1>'+session['title']+'</h1>'))
+        f = open('{0}/templates/{1}.html'.format(CONTENT, session['title']), 'w')
         f.write('{0}'.format(text))
         f.close()
         # Push them to github
@@ -192,4 +196,5 @@ def users():
     return render_template('users.html', user_name=session['username'], num=number)
 
 # Don't open debug mode
-app.run(host='0.0.0.0',port='80')
+if __name__ == '__main__':
+    app.run(host='0.0.0.0',port='80')
