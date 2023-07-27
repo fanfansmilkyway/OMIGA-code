@@ -185,7 +185,7 @@ def editing():
             f.close()
             # Push them to github
             g.add("--all")
-            g.commit("-m auto update {0}".format(request.form['title']))
+            g.commit("-m auto update {0}".format(session['word']))
             g.push()
             return '<h1>成功修改单词</h1>'
     return render_template('editing.html', word=session['word'], content=content)
