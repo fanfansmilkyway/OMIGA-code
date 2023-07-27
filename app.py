@@ -1,5 +1,6 @@
 # Built-in
 import os
+import os.path
 from git import Repo
 # Need to install(not built-in)
 from flask import Flask, request, render_template, flash, redirect, url_for, session
@@ -13,7 +14,6 @@ CONTENT = os.environ['CONTENT_DIR']
 
 # Init
 app = Flask(__name__, template_folder='{0}/templates'.format(CONTENT), static_folder='{0}/static'.format(CONTENT))
-
 app.secret_key = 'q776NkmVYq3vjZwaJn9drw'
 
 # Database
@@ -31,7 +31,7 @@ g = repo.git
 
 # Index pgae
 @app.route('/', methods=['GET','POST'])
-def my_form_post(): 
+def index(): 
     return render_template('index.html')
     
 @app.route('/words', methods=['GET', 'POST'])
@@ -39,19 +39,18 @@ def words():
     if request.method == 'POST':
         # Choose searching mode
         if request.form['submit_button'] == '直接查找':
-            return redirect('/search-word-with-OMIGA')
+            return redirect('/words/search-word-with-OMIGA')
         if request.form['submit_button'] == '用中文查找':
-            return redirect('/search-word-with-chinese')
+            return redirect('/words/search-word-with-chinese')
     return render_template('words.html')
     
-@app.route('/search-word-with-OMIGA', methods=['GET', 'POST'])
+@app.route('/words/search-word-with-OMIGA', methods=['GET', 'POST'])
 def search_word_with_OMIGA():
     if request.method == 'POST':
         # Check if word exists
         try:
             # If yes, show the meaning of the word
-            session['word'] = request.form['word']
-            return render_template('{0}.html'.format(session['word']))
+            return render_template('{0}.html'.format(request.form['word']))
         except:
             # If not, show error message
             return '<h1>未找到此单词</h1>'
@@ -62,12 +61,11 @@ NOT_WORD = ['.DS_Store', '.gitignore', '第一课：OMIGA语言的简介与导�
     '第三课：teriyoga! ditaiyosu! 你们好！初次见面！.html', '第四课：dv ing sihoma tsu loyode 班级中的规则.html',\
     '第五课：noku, misu, kongmi 没有，一些，很多.html','fix.html','index.html','lessons.html','sign_in.html',\
     'sign_up.html','uploads.html','users.html', 'search-word-with-chinese.html', 'search-word-with-OMIGA.html'\
-    ,'words.html']
+    ,'words.html', 'edit.html', 'editing.html']
 
-@app.route('/search-word-with-chinese', methods=['GET', 'POST'])
+@app.route('/words/search-word-with-chinese', methods=['GET', 'POST'])
 def search_word_with_chinese():
     if request.method == 'POST':
-        session['word'] = request.form['word']
         possible_words = []
 
         for filename in os.listdir('{0}/templates'.format(CONTENT)):
@@ -77,7 +75,7 @@ def search_word_with_chinese():
                     text = f.read()
                     f.close()
                     # Cut the sentences with jieba
-                    if '{0}'.format(session['word']) in list(jieba.cut_for_search(text)):
+                    if '{0}'.format(request.form['word']) in list(jieba.cut_for_search(text)):
                         # Find possible words
                         possible_words.append(filename)
         # Output
@@ -96,7 +94,7 @@ def search_word_with_chinese():
     return render_template('search-word-with-chinese.html')
 
 @app.route('/lessons', methods=['GET','POST'])
-def contact_post():
+def lessons():
     if request.method == 'POST':
         # Choose lessons
         if request.form['submit_button'] == '第一课：OMIGA语言的简介与导入':
@@ -112,29 +110,85 @@ def contact_post():
     return render_template('lessons.html')
 
 @app.route('/uploads', methods=['GET', 'POST'])
-def upload_file():
+def uploads():
     if request.method == 'POST':
-        # Convert str to html files
-        session['title'] = str(request.form['title'])
-        session['content'] = request.form['content']
-        text = '<h1>'+session['title']+'</h1>' + repr(str(session['content']))
-        text = text.replace('\\r\\n', '<br>')
-        text = text.replace("'", '')
-        text = '''<head>
-    <title>单词查询</title>
-    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-</head>
-        ''' + text
-        # Write html files
-        f = open('{0}/templates/{1}.html'.format(CONTENT, session['title']), 'w')
-        f.write('{0}'.format(text))
-        f.close()
-        # Push them to github
-        g.add("--all")
-        g.commit("-m auto update {0}".format(session['title']))
-        g.push()
-        return '<h1>成功添加单词</h1>'
+        # Useful Function: Check if 
+        if request.form['submit_button'] == '检查':
+            if os.path.isfile('{0}/templates/{1}.html'.format(CONTENT, request.form['check'])):
+                return '<h1>此单词已经存在，你将无法添加，你只能去<a href="/edit">omiga.org/edit</a>修改单词</h1>'
+            else:
+                return '<h1>这是一个安全的单词，你可以添加</h1>'
+        if request.form['submit_button'] == '完成':
+            # Convert str to html files
+            title = str(request.form['title'])
+            content = request.form['content']
+            # Check if the content is empty
+            if title == '' or content == '':
+                return '<h1>不能添加空的单词！！</h1>'
+            text = '<h1>' + title + '</h1>' + repr(content)
+            text = text.replace('\\r\\n', '<br>')
+            text = text.replace("'", '')
+            text = '''<head>
+        <title>单词查询</title>
+        <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    </head>
+            ''' + text
+            # Check if the word exists
+            if os.path.isfile('{0}/templates/{1}.html'.format(CONTENT, title)):
+                return '<h1>此单词已经存在，你将无法添加</h1>'
+            # Write html files
+            f = open('{0}/templates/{1}.html'.format(CONTENT, title), 'w')
+            f.write('{0}'.format(text))
+            f.close()
+            # Push them to github
+            g.add("--all")
+            g.commit("-m auto update {0}".format(request.form['title']))
+            g.push()
+            return '<h1>成功添加单词</h1>'
     return render_template('uploads.html')
+
+@app.route('/edit', methods=['GET', 'POST'])
+def edit():
+    if request.method == 'POST':
+        word = str(request.form['word'])
+        if os.path.isfile('{0}/templates/{1}.html'.format(CONTENT, word)):
+            session['word'] = word
+            return redirect('/edit/editing')
+        else:
+            return '<h1>此单词还未存在于字典中，若想添加此单词请前往<a href="/uploads">omiga.org/uploads</a></h1>'
+    return render_template('edit.html')
+
+@app.route('/edit/editing', methods=['GET', 'POST'])
+def editing():
+    with open('{0}/templates/{1}.html'.format(CONTENT, session['word']), 'r') as f:
+        content = f.read()
+    content = content.split('</h1>')[1]
+    f.close()
+    if request.method == 'POST':
+        if request.form['submit_button'] == '完成':
+            f = open('{0}/templates/{1}.html'.format(CONTENT, session['word']), 'w')
+            content = request.form['content']
+            # Check if the content is empty
+            if content == '':
+                return '<h1>不能添加空的单词！！</h1>'
+            # Convert string to html
+            text = '<h1>' + session['word'] + '</h1>' + repr(content)
+            text = text.replace('\\r\\n', '<br>')
+            text = text.replace("'", '')
+            text = '''<head>
+            <title>单词查询</title>
+            <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+        </head>
+            ''' + text
+            # Update html file
+            f.write(text)
+            f.close()
+            # Push them to github
+            g.add("--all")
+            g.commit("-m auto update {0}".format(request.form['title']))
+            g.push()
+            return '<h1>成功修改单词</h1>'
+    return render_template('editing.html', word=session['word'], content=content)
 
 @app.route('/sign_up', methods=['GET','POST'])
 def sign_up():
@@ -155,7 +209,7 @@ def sign_up():
 def sign_in():
     if request.method == 'POST':
         user_name = request.form['user_name']
-        password = str(request.form['password'])
+        password = request.form['password']
         # Check if the user exists
         if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (True,):
             # If yes, read the password in database
@@ -177,15 +231,13 @@ def sign_in():
 @app.route('/users', methods=['GET','POST'])
 def users():
     # Check if the user sign in
-    try:
-        session['username']
-    except:
-        # If not, redirect to /sign_in to sign in 
-        return redirect('/sign_in')
-    else:
+    if 'username' in session:
         # If yes, show the user page
         number = con.sql("SELECT Number FROM users WHERE Name='{0}'".format(session['username'])).df()
         number = str(number['Number'][0])
+    else:
+        # If not, redirect to /sign_in to sign in 
+        return redirect('/sign_in')
     
     # Change user data
     if request.method == 'POST':
@@ -195,6 +247,14 @@ def users():
 
     return render_template('users.html', user_name=session['username'], num=number)
 
-# Don't open debug mode
 if __name__ == '__main__':
-    app.run(host='0.0.0.0',port='80')
+    print('''                             
+   ___  __  __ ___ ____    _            
+  / _ \|  \/  |_ _/ ___|  / \   
+ | | | | |\/| || | |  _  / _ \  
+ | |_| | |  | || | |_| |/ ___ \ 
+  \___/|_|  |_|___\____/_/   \_\ 
+                                
+    ''')
+    # Don't open debug mode because of duckdb database.
+    app.run(host='0.0.0.0',port='80', debug=False)
