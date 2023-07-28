@@ -4,8 +4,6 @@ import os.path
 from git import Repo
 # Need to install(not built-in)
 from flask import Flask, request, render_template, flash, redirect, url_for, session
-import jieba
-from werkzeug.utils import secure_filename
 import duckdb
 
 # Environment Variables
@@ -17,13 +15,13 @@ app = Flask(__name__, template_folder='{0}/templates'.format(CONTENT), static_fo
 app.secret_key = 'q776NkmVYq3vjZwaJn9drw'
 
 # Database
+OMIGA_dictionary = duckdb.connect('{0}/dictionary.db'.format(CONTENT))
 con = duckdb.connect("{0}/userdata.db".format(USER_DATA))
 # Create database if it not exists
-try:
-    con.sql("CREATE TABLE users(Id int primary key, Name varchar(255), Password varchar(255), Number varchar(255))")
-    con.sql("CREATE SEQUENCE seq_id START 1")
-except:
-    pass
+con.sql("CREATE TABLE IF NOT EXISTS users(Id int primary key, Name varchar(255), Password varchar(255), Number varchar(255))")
+con.sql("CREATE SEQUENCE IF NOT EXISTS seq_id START 1")
+OMIGA_dictionary.sql("CREATE TABLE IF NOT EXISTS dictionary(Id int primary key, Word varchar(255), Meaning varchar(255))")
+OMIGA_dictionary.sql("CREATE SEQUENCE IF NOT EXISTS seq_id START 1")
 
 # Github
 repo = Repo(CONTENT)
@@ -41,19 +39,29 @@ def words():
         if request.form['submit_button'] == '直接查找':
             return redirect('/words/search-word-with-OMIGA')
         if request.form['submit_button'] == '用中文查找':
-            return redirect('/words/search-word-with-chinese')
+            return redirect('/words/search-word-with-meaning')
     return render_template('words.html')
     
 @app.route('/words/search-word-with-OMIGA', methods=['GET', 'POST'])
 def search_word_with_OMIGA():
     if request.method == 'POST':
+        word = request.form['word']
         # Check if word exists
-        try:
+        if OMIGA_dictionary.sql("SELECT EXISTS(SELECT * FROM dictionary WHERE Word='{0}')".format(word)).fetchall()[0] == (True,):
             # If yes, show the meaning of the word
-            return render_template('{0}.html'.format(request.form['word']))
-        except:
+            meaning = OMIGA_dictionary.sql("SELECT Meaning FROM dictionary WHERE Word='{0}'".format(word)).df()['Meaning'][0]
+            text = '<h1>' + word + '</h1>' + repr(meaning)
+            text = text.replace('\\r\\n', '<br>')
+            text = text.replace("'", '')
+            text = '''<head>
+        <title>单词查询</title>
+        <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    </head>
+            ''' + text
+            return text
+        else:
             # If not, show error message
-            return '<h1>未找到此单词</h1>'
+            return "<h1>未找到此单词</h1>"
     return render_template('search-word-with-OMIGA.html')
 
 # These are not words
@@ -63,31 +71,23 @@ NOT_WORD = ['.DS_Store', '.gitignore', '第一课：OMIGA语言的简介与导�
     'sign_up.html','uploads.html','users.html', 'search-word-with-chinese.html', 'search-word-with-OMIGA.html'\
     ,'words.html', 'edit.html', 'editing.html']
 
-@app.route('/words/search-word-with-chinese', methods=['GET', 'POST'])
+@app.route('/words/search-word-with-meaning', methods=['GET', 'POST'])
 def search_word_with_chinese():
     if request.method == 'POST':
+        search_expresion = request.form['search']
         possible_words = []
-
-        for filename in os.listdir('{0}/templates'.format(CONTENT)):
-            if filename not in NOT_WORD: # Check if the file is a word or not
-                with open("{0}/templates/{1}".format(CONTENT, filename), "r") as f:
-                    # Read it
-                    text = f.read()
-                    f.close()
-                    # Cut the sentences with jieba
-                    if '{0}'.format(request.form['word']) in list(jieba.cut_for_search(text)):
-                        # Find possible words
-                        possible_words.append(filename)
-        # Output
-        possible_words = [file_name[:-5] for file_name in possible_words]
+        meanings = list(OMIGA_dictionary.sql("SELECT Meaning FROM dictionary").fetchall())
+        words = list(OMIGA_dictionary.sql("SELECT Word FROM dictionary").fetchall())
+        for word in words:
+            meaning = meanings[words.index(word)][0]
+            word = word[0]
+            if search_expresion in meaning:
+                possible_words.append(word)
         result = ', '.join(possible_words)
-        # Check if possible words exist
+        # Check if possible words exists
         if result != '':
-            # If yes, output
-            return '''
-            <h1>找到以下可能的单词</h1>
-            <h3>{0}</h3>
-            '''.format(result)  
+            # If yes, return the result
+                return "<h1>找到以下可能的单词</h1> <br> <h3>{0}</h3>".format(result)
         if result == '':
             # If not, show error message
             return '<h1>未找到单词'
@@ -98,49 +98,38 @@ def lessons():
     if request.method == 'POST':
         # Choose lessons
         if request.form['submit_button'] == '第一课：OMIGA语言的简介与导入':
-            return render_template('第一课：OMIGA语言的简介与导入.html')
+            return render_template('lessons/第一课：OMIGA语言的简介与导入.html')
         if request.form['submit_button'] == '第二课：OMIGA语言的基本词语与语句':
-            return render_template('第二课：OMIGA语言的基本词语与语句.html')
+            return render_template('lessons/第二课：OMIGA语言的基本词语与语句.html')
         if request.form['submit_button'] == '第三课：teriyoga! ditaiyosu! 你们好！初次见面！':
-            return render_template('第三课：teriyoga! ditaiyosu! 你们好！初次见面！.html')
+            return render_template('lessons/第三课：teriyoga! ditaiyosu! 你们好！初次见面！.html')
         if request.form['submit_button'] == '第四课：dv ing sihoma tsu loyode 班级中的规则':
-            return render_template('第四课：dv ing sihoma tsu loyode 班级中的规则.html')
+            return render_template('lessons/第四课：dv ing sihoma tsu loyode 班级中的规则.html')
         if request.form['submit_button'] == '第五课：noku, misu, kongmi 没有，一些，很多':
-            return render_template('第五课：noku, misu, kongmi 没有，一些，很多.html')
+            return render_template('lessons/第五课：noku, misu, kongmi 没有，一些，很多.html')
     return render_template('lessons.html')
 
 @app.route('/uploads', methods=['GET', 'POST'])
 def uploads():
     if request.method == 'POST':
-        # Useful Function: Check if 
+        # Useful Function: Check if word already existed
         if request.form['submit_button'] == '检查':
-            if os.path.isfile('{0}/templates/{1}.html'.format(CONTENT, request.form['check'])):
+            if OMIGA_dictionary.sql("SELECT EXISTS(SELECT * FROM dictionary WHERE Word='{0}')".format(request.form['check'])).fetchall()[0] == (True, ):
+                # If yes, show error message
                 return '<h1>此单词已经存在，你将无法添加，你只能去<a href="/edit">omiga.org/edit</a>修改单词</h1>'
             else:
+                # If not:
                 return '<h1>这是一个安全的单词，你可以添加</h1>'
         if request.form['submit_button'] == '完成':
-            # Convert str to html files
             title = str(request.form['title'])
-            content = request.form['content']
+            if OMIGA_dictionary.sql("SELECT EXISTS(SELECT * FROM dictionary WHERE Word='{0}')".format(title)).fetchall()[0] == (True, ):
+                return '<h1>此单词已经存在，你将无法添加，你只能去<a href="/edit">omiga.org/edit</a>修改单词</h1>'
+            content = str(request.form['content'])
             # Check if the content is empty
             if title == '' or content == '':
                 return '<h1>不能添加空的单词！！</h1>'
-            text = '<h1>' + title + '</h1>' + repr(content)
-            text = text.replace('\\r\\n', '<br>')
-            text = text.replace("'", '')
-            text = '''<head>
-        <title>单词查询</title>
-        <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-    </head>
-            ''' + text
-            # Check if the word exists
-            if os.path.isfile('{0}/templates/{1}.html'.format(CONTENT, title)):
-                return '<h1>此单词已经存在，你将无法添加</h1>'
-            # Write html files
-            f = open('{0}/templates/{1}.html'.format(CONTENT, title), 'w')
-            f.write('{0}'.format(text))
-            f.close()
-            # Push them to github
+            OMIGA_dictionary.sql("INSERT INTO dictionary (Id, Word, Meaning) VALUES (nextval('seq_id'), '{0}', '{1}')".format(title, content))
+            # Push dataset to github
             g.add("--all")
             g.commit("-m auto update {0}".format(request.form['title']))
             g.push()
@@ -151,39 +140,27 @@ def uploads():
 def edit():
     if request.method == 'POST':
         word = str(request.form['word'])
-        if os.path.isfile('{0}/templates/{1}.html'.format(CONTENT, word)):
+        # Check if the word exists
+        if OMIGA_dictionary.sql("SELECT EXISTS(SELECT * FROM dictionary WHERE Word='{0}')".format(word)).fetchall()[0] == (True,):
+            # If yes, redirect to /edit/editing
             session['word'] = word
             return redirect('/edit/editing')
         else:
+            # If not, show error message
             return '<h1>此单词还未存在于字典中，若想添加此单词请前往<a href="/uploads">omiga.org/uploads</a></h1>'
     return render_template('edit.html')
 
 @app.route('/edit/editing', methods=['GET', 'POST'])
 def editing():
-    with open('{0}/templates/{1}.html'.format(CONTENT, session['word']), 'r') as f:
-        content = f.read()
-    content = content.split('</h1>')[1]
-    f.close()
+    content = OMIGA_dictionary.sql("SELECT Meaning FROM dictionary WHERE Word='{0}'".format(session['word'])).df()['Meaning'][0]
     if request.method == 'POST':
         if request.form['submit_button'] == '完成':
-            f = open('{0}/templates/{1}.html'.format(CONTENT, session['word']), 'w')
-            content = request.form['content']
+            edited_content = request.form['content']
             # Check if the content is empty
-            if content == '':
+            if edited_content == '':
                 return '<h1>不能添加空的单词！！</h1>'
-            # Convert string to html
-            text = '<h1>' + session['word'] + '</h1>' + repr(content)
-            text = text.replace('\\r\\n', '<br>')
-            text = text.replace("'", '')
-            text = '''<head>
-            <title>单词查询</title>
-            <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-        </head>
-            ''' + text
-            # Update html file
-            f.write(text)
-            f.close()
-            # Push them to github
+            OMIGA_dictionary.sql("UPDATE dictionary SET Meaning='{0}' WHERE Word='{1}'".format(edited_content, session['word']))
+            # Push dataset to github
             g.add("--all")
             g.commit("-m auto update {0}".format(session['word']))
             g.push()
