@@ -9,6 +9,7 @@ import duckdb
 # Environment Variables
 USER_DATA = os.environ['USER_DATA_DIR']
 CONTENT = os.environ['CONTENT_DIR']
+GITHUB = os.environ['GITHUB'] # 0 or 1
 
 # Init
 app = Flask(__name__, template_folder='{0}/templates'.format(CONTENT), static_folder='{0}/static'.format(CONTENT))
@@ -24,8 +25,9 @@ OMIGA_dictionary.sql("CREATE TABLE IF NOT EXISTS dictionary(Id int primary key, 
 OMIGA_dictionary.sql("CREATE SEQUENCE IF NOT EXISTS seq_id START 1")
 
 # Github
-repo = Repo(CONTENT)
-g = repo.git
+if GITHUB == 1:
+    repo = Repo(CONTENT)
+    g = repo.git
 
 # Index pgae
 @app.route('/', methods=['GET','POST'])
@@ -109,6 +111,45 @@ def lessons():
             return render_template('lessons/第五课：noku, misu, kongmi 没有，一些，很多.html')
     return render_template('lessons.html')
 
+def txt_web_show(filepath):
+    filepath = CONTENT + '/templates/passages/' + filepath
+    with open(filepath, 'r') as f:
+        text = f.read()
+        f.close()
+    text = repr(text)
+    text = text.replace('\\n', '<br>')
+    text = text.replace('\\t', '&emsp;&emsp;')
+    text = '<p>' + text + '</p>'
+    output = '''<head>
+        <title>OMIGA文章阅读</title>
+        <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
+    </head>
+            ''' + text
+    return output
+    
+@app.route('/passages', methods=['GET', 'POST'])
+def passages():
+    if request.method == 'POST':
+        if request.form['submit_button'] == 'hotini hegude 校园政府':
+            return redirect('/passages/hotini-hegude')
+        if request.form['submit_button'] == 'remu o OMIGA OMIGA之歌':
+            return txt_web_show('songs/remu-o-OMIGA.txt')
+        if request.form['submit_button'] == 'HUNTERxHUNTER Departure OP 全职猎人 Departure 主题曲':
+            return txt_web_show('songs/HUNTERxHUNTER--Departure.txt')
+    return render_template('passages.html')
+
+@app.route('/passages/hotini-hegude', methods=['GET', 'POST'])
+def hotini_hegude():
+    if request.method == 'POST':
+        if request.form['submit_button'] == '1.memode':
+            return txt_web_show('hotini-hegude/yi-memode.txt')
+        if request.form['submit_button'] == '2.honakode':
+            return txt_web_show('hotini-hegude/nv-honakode.txt')
+        if request.form['submit_button'] == '3.goku':
+            return txt_web_show('hotini-hegude/sv-goku.txt')
+    return render_template('hotini-hegude.html')
+
 @app.route('/uploads', methods=['GET', 'POST'])
 def uploads():
     if request.method == 'POST':
@@ -130,9 +171,10 @@ def uploads():
                 return '<h1>不能添加空的单词！！</h1>'
             OMIGA_dictionary.sql("INSERT INTO dictionary (Id, Word, Meaning) VALUES (nextval('seq_id'), '{0}', '{1}')".format(title, content))
             # Push dataset to github
-            g.add("--all")
-            g.commit("-m auto update {0}".format(request.form['title']))
-            g.push()
+            if GITHUB == 1:
+                g.add("--all")
+                g.commit("-m auto update {0}".format(request.form['title']))
+                g.push()
             return '<h1>成功添加单词</h1>'
     return render_template('uploads.html')
 
@@ -161,10 +203,18 @@ def editing():
                 return '<h1>不能添加空的单词！！</h1>'
             OMIGA_dictionary.sql("UPDATE dictionary SET Meaning='{0}' WHERE Word='{1}'".format(edited_content, session['word']))
             # Push dataset to github
-            g.add("--all")
-            g.commit("-m auto update {0}".format(session['word']))
-            g.push()
+            if GITHUB == 1:
+                g.add("--all")
+                g.commit("-m auto update {0}".format(session['word']))
+                g.push()
             return '<h1>成功修改单词</h1>'
+        if request.form['submit_button'] == '删除此单词':
+            OMIGA_dictionary.sql("DELETE FROM dictionary WHERE Word='{0}'".format(session['word']))
+            if GITHUB == 1:
+                g.add("--all")
+                g.commit("-m auto update {0}".format(session['word']))
+                g.push()
+            return "<h1>成功删除此单词</h1>"
     return render_template('editing.html', word=session['word'], content=content)
 
 @app.route('/sign_up', methods=['GET','POST'])
