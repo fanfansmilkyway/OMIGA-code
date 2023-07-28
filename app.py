@@ -1,17 +1,16 @@
 # Built-in
 import os
-import os.path
+from datetime import date
 from git import Repo
 # Need to install(not built-in)
-from flask import Flask, request, render_template, flash, redirect, url_for, session
+from flask import Flask, request, render_template, redirect, session
 import duckdb
 
 # Environment Variables
-USER_DATA = os.environ['USER_DATA_DIR']
-CONTENT = os.environ['CONTENT_DIR']
-GITHUB = os.environ['GITHUB'] # 0 or 1
+USER_DATA = os.environ['USER_DATA_DIR'] # 'user data' folder's location
+CONTENT = os.environ['CONTENT_DIR'] # 'content' folder's location
+GITHUB = os.environ['GITHUB'] # 0 or 1, means github fuction is off or on.
 
-# Init
 app = Flask(__name__, template_folder='{0}/templates'.format(CONTENT), static_folder='{0}/static'.format(CONTENT))
 app.secret_key = 'q776NkmVYq3vjZwaJn9drw'
 
@@ -29,7 +28,7 @@ if GITHUB == 1:
     repo = Repo(CONTENT)
     g = repo.git
 
-# Index pgae
+# Main pgae
 @app.route('/', methods=['GET','POST'])
 def index(): 
     return render_template('index.html')
@@ -40,7 +39,7 @@ def words():
         # Choose searching mode
         if request.form['submit_button'] == '直接查找':
             return redirect('/words/search-word-with-OMIGA')
-        if request.form['submit_button'] == '用中文查找':
+        if request.form['submit_button'] == '查找单词的解释':
             return redirect('/words/search-word-with-meaning')
     return render_template('words.html')
     
@@ -66,20 +65,15 @@ def search_word_with_OMIGA():
             return "<h1>未找到此单词</h1>"
     return render_template('search-word-with-OMIGA.html')
 
-# These are not words
-NOT_WORD = ['.DS_Store', '.gitignore', '第一课：OMIGA语言的简介与导入.html', '第二课：OMIGA语言的基本词语与语句.html',\
-    '第三课：teriyoga! ditaiyosu! 你们好！初次见面！.html', '第四课：dv ing sihoma tsu loyode 班级中的规则.html',\
-    '第五课：noku, misu, kongmi 没有，一些，很多.html','fix.html','index.html','lessons.html','sign_in.html',\
-    'sign_up.html','uploads.html','users.html', 'search-word-with-chinese.html', 'search-word-with-OMIGA.html'\
-    ,'words.html', 'edit.html', 'editing.html']
-
 @app.route('/words/search-word-with-meaning', methods=['GET', 'POST'])
 def search_word_with_chinese():
     if request.method == 'POST':
         search_expresion = request.form['search']
         possible_words = []
+        # Read ALL words from dataset
         meanings = list(OMIGA_dictionary.sql("SELECT Meaning FROM dictionary").fetchall())
         words = list(OMIGA_dictionary.sql("SELECT Word FROM dictionary").fetchall())
+        # Search
         for word in words:
             meaning = meanings[words.index(word)][0]
             word = word[0]
@@ -93,12 +87,12 @@ def search_word_with_chinese():
         if result == '':
             # If not, show error message
             return '<h1>未找到单词'
-    return render_template('search-word-with-chinese.html')
+    return render_template('search-word-with-meaning.html')
 
 @app.route('/lessons', methods=['GET','POST'])
 def lessons():
     if request.method == 'POST':
-        # Choose lessons
+        # Choose lesson
         if request.form['submit_button'] == '第一课：OMIGA语言的简介与导入':
             return render_template('lessons/第一课：OMIGA语言的简介与导入.html')
         if request.form['submit_button'] == '第二课：OMIGA语言的基本词语与语句':
@@ -111,6 +105,7 @@ def lessons():
             return render_template('lessons/第五课：noku, misu, kongmi 没有，一些，很多.html')
     return render_template('lessons.html')
 
+# Function: Convert txt file to html
 def txt_web_show(filepath):
     filepath = CONTENT + '/templates/passages/' + filepath
     with open(filepath, 'r') as f:
@@ -119,6 +114,7 @@ def txt_web_show(filepath):
     text = repr(text)
     text = text.replace('\\n', '<br>')
     text = text.replace('\\t', '&emsp;&emsp;')
+    text = text.replace("\\'", "'")
     text = '<p>' + text + '</p>'
     output = '''<head>
         <title>OMIGA文章阅读</title>
@@ -131,6 +127,7 @@ def txt_web_show(filepath):
 @app.route('/passages', methods=['GET', 'POST'])
 def passages():
     if request.method == 'POST':
+        # Choose passage
         if request.form['submit_button'] == 'hotini hegude 校园政府':
             return redirect('/passages/hotini-hegude')
         if request.form['submit_button'] == 'remu o OMIGA OMIGA之歌':
@@ -142,6 +139,7 @@ def passages():
 @app.route('/passages/hotini-hegude', methods=['GET', 'POST'])
 def hotini_hegude():
     if request.method == 'POST':
+        # Choose chapter
         if request.form['submit_button'] == '1.memode':
             return txt_web_show('hotini-hegude/yi-memode.txt')
         if request.form['submit_button'] == '2.honakode':
@@ -173,7 +171,7 @@ def uploads():
             # Push dataset to github
             if GITHUB == 1:
                 g.add("--all")
-                g.commit("-m auto update {0}".format(request.form['title']))
+                g.commit("-m auto update {0} from omiga.org".format(request.form['title']))
                 g.push()
             return '<h1>成功添加单词</h1>'
     return render_template('uploads.html')
@@ -194,6 +192,7 @@ def edit():
 
 @app.route('/edit/editing', methods=['GET', 'POST'])
 def editing():
+    # Read from dataset
     content = OMIGA_dictionary.sql("SELECT Meaning FROM dictionary WHERE Word='{0}'".format(session['word'])).df()['Meaning'][0]
     if request.method == 'POST':
         if request.form['submit_button'] == '完成':
@@ -205,14 +204,14 @@ def editing():
             # Push dataset to github
             if GITHUB == 1:
                 g.add("--all")
-                g.commit("-m auto update {0}".format(session['word']))
+                g.commit("-m auto update {0} from omiga.org".format(session['word']))
                 g.push()
             return '<h1>成功修改单词</h1>'
         if request.form['submit_button'] == '删除此单词':
             OMIGA_dictionary.sql("DELETE FROM dictionary WHERE Word='{0}'".format(session['word']))
             if GITHUB == 1:
                 g.add("--all")
-                g.commit("-m auto update {0}".format(session['word']))
+                g.commit("-m auto update {0} from omiga.org".format(session['word']))
                 g.push()
             return "<h1>成功删除此单词</h1>"
     return render_template('editing.html', word=session['word'], content=content)
@@ -274,14 +273,15 @@ def users():
 
     return render_template('users.html', user_name=session['username'], num=number)
 
+# Run!!!!!
 if __name__ == '__main__':
     print('''                             
    ___  __  __ ___ ____    _            
-  / _ \|  \/  |_ _/ ___|  / \   
- | | | | |\/| || | |  _  / _ \  
- | |_| | |  | || | |_| |/ ___ \ 
-  \___/|_|  |_|___\____/_/   \_\ 
-                                
+  / _ \|  \/  |_ _/ ___|  / \     
+ | | | | |\/| || | |  _  / _ \      Version: BETA2.1
+ | |_| | |  | || | |_| |/ ___ \     Contributor: Fanfansmilyway, Fkpwolf
+  \___/|_|  |_|___\____/_/   \_\    Date: 2023/7/28
+
     ''')
     # Don't open debug mode because of duckdb database.
     app.run(host='0.0.0.0',port='80', debug=False)
