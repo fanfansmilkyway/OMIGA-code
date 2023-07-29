@@ -97,12 +97,14 @@ def lessons():
             return render_template('lessons/第一课：OMIGA语言的简介与导入.html')
         if request.form['submit_button'] == '第二课：OMIGA语言的基本词语与语句':
             return render_template('lessons/第二课：OMIGA语言的基本词语与语句.html')
-        if request.form['submit_button'] == '第三课：teriyoga! ditaiyosu! 你们好！初次见面！':
-            return render_template('lessons/第三课：teriyoga! ditaiyosu! 你们好！初次见面！.html')
-        if request.form['submit_button'] == '第四课：dv ing sihoma tsu loyode 班级中的规则':
-            return render_template('lessons/第四课：dv ing sihoma tsu loyode 班级中的规则.html')
-        if request.form['submit_button'] == '第五课：noku, misu, kongmi 没有，一些，很多':
-            return render_template('lessons/第五课：noku, misu, kongmi 没有，一些，很多.html')
+        if request.form['submit_button'] == '第三课：人称代词，基本的问候语，所有格':
+            return render_template('lessons/第三课：人称代词，基本的问候语，所有格.html')
+        if request.form['submit_button'] == '第四课：teriyoga! ditaiyosu! 你们好！初次见面！':
+            return render_template('lessons/第四课：teriyoga! ditaiyosu! 你们好！初次见面！.html')
+        if request.form['submit_button'] == '第五课：dv ing sihoma tsu loyode 班级中的规则':
+            return render_template('lessons/第五课：dv ing sihoma tsu loyode 班级中的规则.html')
+        if request.form['submit_button'] == '第六课：noku, misu, kongmi 没有，一些，很多':
+            return render_template('lessons/第六课：noku, misu, kongmi 没有，一些，很多.html')
     return render_template('lessons.html')
 
 # Function: Convert txt file to html
@@ -278,7 +280,7 @@ if __name__ == '__main__':
     print('''                             
    ___  __  __ ___ ____    _            
   / _ \|  \/  |_ _/ ___|  / \     
- | | | | |\/| || | |  _  / _ \      Version: BETA2.1
+ | | | | |\/| || | |  _  / _ \      Version: BETA2.1a
  | |_| | |  | || | |_| |/ ___ \     Contributor: Fanfansmilyway, Fkpwolf
   \___/|_|  |_|___\____/_/   \_\    Date: 2023/7/28
 
