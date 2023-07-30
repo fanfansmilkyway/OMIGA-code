@@ -41,7 +41,8 @@ def words():
             return redirect('/words/search-word-with-OMIGA')
         if request.form['submit_button'] == '查找单词的解释':
             return redirect('/words/search-word-with-meaning')
-    return render_template('words.html')
+    rows = OMIGA_dictionary.sql("SELECT COUNT(*) FROM dictionary").fetchall()[0][0]
+    return render_template('words.html', rows=rows)
     
 @app.route('/words/search-word-with-OMIGA', methods=['GET', 'POST'])
 def search_word_with_OMIGA():
@@ -280,9 +281,9 @@ if __name__ == '__main__':
     print('''                             
    ___  __  __ ___ ____    _            
   / _ \|  \/  |_ _/ ___|  / \     
- | | | | |\/| || | |  _  / _ \      Version: BETA2.1a
+ | | | | |\/| || | |  _  / _ \      Version: BETA2.2
  | |_| | |  | || | |_| |/ ___ \     Contributor: Fanfansmilyway, Fkpwolf
-  \___/|_|  |_|___\____/_/   \_\    Date: 2023/7/28
+  \___/|_|  |_|___\____/_/   \_\    Date: 2023/7/30
 
     ''')
     # Don't open debug mode because of duckdb database.
