@@ -1,9 +1,9 @@
-# Built-in
+# Built-in modules
 import os
 from datetime import date
 from git import Repo
 # Need to install(not built-in)
-from flask import Flask, request, render_template, redirect, session
+from flask import Flask, request, render_template, redirect, session, send_from_directory, url_for
 import duckdb
 
 # Environment Variables
@@ -32,7 +32,7 @@ if GITHUB == 1:
 @app.route('/', methods=['GET','POST'])
 def index(): 
     return render_template('index.html')
-    
+
 @app.route('/words', methods=['GET', 'POST'])
 def words():
     if request.method == 'POST':
@@ -41,6 +41,13 @@ def words():
             return redirect('/words/search-word-with-OMIGA')
         if request.form['submit_button'] == '查找单词的解释':
             return redirect('/words/search-word-with-meaning')
+        if request.form['submit_button'] == '查看所有单词':
+            all_words = OMIGA_dictionary.sql("SELECT Word FROM dictionary").fetchall()
+            all_words = [i[0] for i in all_words]
+            text = '<h1>目前的所有单词有:</h1>'
+            for k in all_words:
+                text = text + k + ", "
+            return text
     rows = OMIGA_dictionary.sql("SELECT COUNT(*) FROM dictionary").fetchall()[0][0]
     return render_template('words.html', rows=rows)
     
@@ -57,7 +64,6 @@ def search_word_with_OMIGA():
             text = text.replace("'", '')
             text = '''<head>
         <title>单词查询</title>
-        <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
     </head>
             ''' + text
             return text
@@ -118,14 +124,11 @@ def txt_web_show(filepath):
     text = text.replace('\\n', '<br>')
     text = text.replace('\\t', '&emsp;&emsp;')
     text = text.replace("\\'", "'")
-    text = '<p>' + text + '</p>'
-    output = '''<head>
-        <title>OMIGA文章阅读</title>
-        <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-
+    text = '''<head>
+        <title>文章阅读</title>
     </head>
             ''' + text
-    return output
+    return text
     
 @app.route('/passages', methods=['GET', 'POST'])
 def passages():
@@ -281,9 +284,9 @@ if __name__ == '__main__':
     print('''                             
    ___  __  __ ___ ____    _            
   / _ \|  \/  |_ _/ ___|  / \     
- | | | | |\/| || | |  _  / _ \      Version: BETA2.2
+ | | | | |\/| || | |  _  / _ \      Version: BETA2.3
  | |_| | |  | || | |_| |/ ___ \     Contributor: Fanfansmilyway, Fkpwolf
-  \___/|_|  |_|___\____/_/   \_\    Date: 2023/7/30
+  \___/|_|  |_|___\____/_/   \_\    Date: 2023/8/27
 
     ''')
     # Don't open debug mode because of duckdb database.
