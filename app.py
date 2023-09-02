@@ -1,37 +1,37 @@
 # Built-in modules
 import os
-from datetime import date
-from git import Repo
+from datetime import datetime
 # Need to install(not built-in)
-from flask import Flask, request, render_template, redirect, session, send_from_directory, url_for
+from flask import Flask, request, render_template, redirect, session, send_from_directory, url_for, flash
 import duckdb
 
 # Environment Variables
-USER_DATA = os.environ['USER_DATA_DIR'] # 'user data' folder's location
+DATABASE = os.environ['DATABASE_DIR'] # 'user data' folder's location
 CONTENT = os.environ['CONTENT_DIR'] # 'content' folder's location
-GITHUB = os.environ['GITHUB'] # 0 or 1, means github fuction is off or on.
+GITHUB = os.environ['GITHUB'] # 0 or 1, means github fuction is off or on
 
 app = Flask(__name__, template_folder='{0}/templates'.format(CONTENT), static_folder='{0}/static'.format(CONTENT))
 app.secret_key = 'q776NkmVYq3vjZwaJn9drw'
 
 # Database
-OMIGA_dictionary = duckdb.connect('{0}/dictionary.db'.format(CONTENT))
-con = duckdb.connect("{0}/userdata.db".format(USER_DATA))
+OMIGA_dictionary = duckdb.connect('{0}/dictionary.db'.format(DATABASE))
+discussion_database = duckdb.connect("{0}/discussion.db".format(DATABASE))
+con = duckdb.connect("{0}/userdata.db".format(DATABASE))
 # Create database if it not exists
 con.sql("CREATE TABLE IF NOT EXISTS users(Id int primary key, Name varchar(255), Password varchar(255), Number varchar(255))")
 con.sql("CREATE SEQUENCE IF NOT EXISTS seq_id START 1")
 OMIGA_dictionary.sql("CREATE TABLE IF NOT EXISTS dictionary(Id int primary key, Word varchar(255), Meaning varchar(255))")
 OMIGA_dictionary.sql("CREATE SEQUENCE IF NOT EXISTS seq_id START 1")
-
-# Github
-if GITHUB == 1:
-    repo = Repo(CONTENT)
-    g = repo.git
+discussion_database.sql("CREATE TABLE IF NOT EXISTS discussion(Id int primary key, Title varchar(255), Content varchar(255), CreatedTime varchar(255), Username varchar(255))")
+discussion_database.sql("CREATE SEQUENCE IF NOT EXISTS seq_id START 1")
 
 # Main pgae
 @app.route('/', methods=['GET','POST'])
-def index(): 
-    return render_template('index.html')
+def index():
+    if request.method == 'POST':
+        if request.form['submit_button'] == '登录':
+            return redirect('/sign_in')
+    return render_template('index.html', username=session.get('username', 'Guest'))
 
 @app.route('/words', methods=['GET', 'POST'])
 def words():
@@ -174,11 +174,6 @@ def uploads():
             if title == '' or content == '':
                 return '<h1>不能添加空的单词！！</h1>'
             OMIGA_dictionary.sql("INSERT INTO dictionary (Id, Word, Meaning) VALUES (nextval('seq_id'), '{0}', '{1}')".format(title, content))
-            # Push dataset to github
-            if GITHUB == 1:
-                g.add("--all")
-                g.commit("-m auto update {0} from omiga.org".format(request.form['title']))
-                g.push()
             return '<h1>成功添加单词</h1>'
     return render_template('uploads.html')
 
@@ -208,19 +203,55 @@ def editing():
                 return '<h1>不能添加空的单词！！</h1>'
             OMIGA_dictionary.sql("UPDATE dictionary SET Meaning='{0}' WHERE Word='{1}'".format(edited_content, session['word']))
             # Push dataset to github
-            if GITHUB == 1:
-                g.add("--all")
-                g.commit("-m auto update {0} from omiga.org".format(session['word']))
-                g.push()
             return '<h1>成功修改单词</h1>'
         if request.form['submit_button'] == '删除此单词':
             OMIGA_dictionary.sql("DELETE FROM dictionary WHERE Word='{0}'".format(session['word']))
-            if GITHUB == 1:
-                g.add("--all")
-                g.commit("-m auto update {0} from omiga.org".format(session['word']))
-                g.push()
             return "<h1>成功删除此单词</h1>"
     return render_template('editing.html', word=session['word'], content=content)
+
+@app.route('/discussion', methods=['GET', 'POST'])
+def discussion():
+    list_title = discussion_database.sql("SELECT Title FROM discussion").fetchall()
+    list_title = [i[0] for i in list_title]
+    list_time = discussion_database.sql("SELECT CreatedTime FROM discussion").fetchall()
+    list_time = [i[0] for i in list_time]
+    list_user = discussion_database.sql("SELECT Username FROM discussion").fetchall()
+    list_user = [i[0] for i in list_user]
+    list_id = discussion_database.sql("SELECT Id FROM discussion").fetchall()
+    list_id = [i[0] for i in list_id]
+    my_list = [[a, b, c, d] for a, b, c, d in zip(list_id, list_title, list_time, list_user)]
+    my_list.reverse()
+    if request.method == 'POST':
+        if request.form['submit_button'] == "创作一篇文章":
+            return redirect('/discussion/create')
+        if request.form['submit_button'] == '登录':
+            return redirect('/sign_in')
+    return render_template('discussion.html', my_list=my_list, username=session.get('username', 'Guest'))
+
+@app.route('/discussion/create', methods=['GET', 'POST'])
+def discussion_create():
+    if 'username' not in session:
+        return redirect('/sign_in')
+    if request.method == 'POST':
+        title = request.form['title']
+        content = request.form['content']
+        now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        discussion_database.sql("INSERT INTO discussion (Id, Title, Content, CreatedTime, Username) VALUES (nextval('seq_id'), '{0}', '{1}', '{2}', '{3}')".format(title, content, now, session['username']))
+        discussion_database.sql("SELECT * FROM discussion").show()
+    return render_template('discussion-create.html', username=session.get('username', 'Guest'))
+
+@app.route('/discussion/view/<passage_id>', methods=['GET'])
+def view_passage(passage_id):
+    title = discussion_database.sql("SELECT Title FROM discussion WHERE Id={0}".format(passage_id)).fetchone()[0]
+    content = discussion_database.sql("SELECT Content FROM discussion WHERE Id={0}".format(passage_id)).fetchone()[0]
+    time = discussion_database.sql("SELECT CreatedTime FROM discussion WHERE Id={0}".format(passage_id)).fetchone()[0]
+    user = discussion_database.sql("SELECT Username FROM discussion WHERE Id={0}".format(passage_id)).fetchone()[0]
+    id = discussion_database.sql("SELECT Id FROM discussion WHERE Id={0}".format(passage_id)).fetchone()[0]
+    content = content.replace(' ', '&nbsp;')
+    content = content.replace('\n', '<br>')
+    content = content.replace('\\t', '&emsp;&emsp;')
+    content = content.replace("\\'", "'")
+    return render_template('discussion-view.html', title=title, content=content, user=user, time=time, id=id)   
 
 @app.route('/sign_up', methods=['GET','POST'])
 def sign_up():
@@ -240,25 +271,28 @@ def sign_up():
 @app.route('/sign_in', methods=['GET','POST'])
 def sign_in():
     if request.method == 'POST':
-        user_name = request.form['user_name']
-        password = request.form['password']
-        # Check if the user exists
-        if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (True,):
-            # If yes, read the password in database
-            real_password = con.sql("SELECT Password FROM users WHERE Name='{0}'".\
-                format(user_name)).df()
-            real_password = str(real_password['Password'][0])
-        if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (False,):
-            # If not, show error message
-            return '<h1>此用户不存在</h1>'
-        # Check if the password is correct
-        if password == real_password:
-            session['username'] = user_name
-            return redirect('/users')
-        else:
-            return '<h1>密码错误</h1>'
+        if request.form['submit_button'] == 'Complete':
+            user_name = request.form['user_name']
+            password = request.form['password']
+            # Check if the user exists
+            if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (True,):
+                # If yes, read the password in database
+                real_password = con.sql("SELECT Password FROM users WHERE Name='{0}'".\
+                    format(user_name)).df()
+                real_password = str(real_password['Password'][0])
+            if con.sql("SELECT EXISTS(SELECT * FROM users WHERE Name='{0}')".format(user_name)).fetchall()[0] == (False,):
+                # If not, show error message
+                return '<h1>此用户不存在</h1>'
+            # Check if the password is correct
+            if password == real_password:
+                session['username'] = user_name
+            else:
+                return '<h1>密码错误</h1>'
+        if request.form['submit_button'] == '退出账号':
+            session.pop('username', None)
+            return '<h1>成功退出账户</h1>'
 
-    return render_template('sign_in.html')
+    return render_template('sign_in.html', username=session.get('username', 'Guest'))
             
 @app.route('/users', methods=['GET','POST'])
 def users():
@@ -279,14 +313,18 @@ def users():
 
     return render_template('users.html', user_name=session['username'], num=number)
 
+@app.errorhandler(404)
+def page_not_found(error):
+    return "404PageNotFound: 未找到此页面,请检查你的网址是否有错误", 404
+
 # Run!!!!!
 if __name__ == '__main__':
     print('''                             
    ___  __  __ ___ ____    _            
   / _ \|  \/  |_ _/ ___|  / \     
- | | | | |\/| || | |  _  / _ \      Version: BETA2.3
+ | | | | |\/| || | |  _  / _ \      Version: BETA3.0
  | |_| | |  | || | |_| |/ ___ \     Contributor: Fanfansmilyway, Fkpwolf
-  \___/|_|  |_|___\____/_/   \_\    Date: 2023/8/27
+  \___/|_|  |_|___\____/_/   \_\    Date: 2023/9/2
 
     ''')
     # Don't open debug mode because of duckdb database.
