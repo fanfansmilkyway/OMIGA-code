@@ -1,7 +1,7 @@
 # Built-in modules
 import os
 # Need to install(not built-in)
-from flask import Flask, request, render_template, redirect, session, flash
+from flask import Flask, request, render_template, redirect, session, url_for
 import duckdb
 
 # Environment Variables
@@ -64,22 +64,23 @@ def search_word_with_OMIGA():
         if request.form['submit_button'] == '登录':
             session['last_page'] = "/words/search-word-with-OMIGA"
             return redirect('/sign_in')
-        word = request.form['word']
-        # Check if word exists
-        if OMIGA_dictionary.sql("SELECT EXISTS(SELECT * FROM dictionary WHERE Word='{0}')".format(word)).fetchall()[0] == (True,):
-            # If yes, show the meaning of the word
-            meaning = OMIGA_dictionary.sql("SELECT Meaning FROM dictionary WHERE Word='{0}'".format(word)).df()['Meaning'][0]
-            text = '<h1>' + word + '</h1>' + repr(meaning)
-            text = text.replace('\\r\\n', '<br>')
-            text = text.replace("'", '')
-            text = '''<head>
-        <title>单词查询</title>
-    </head>
-            ''' + text
-            return text
-        else:
-            # If not, show error message
-            return "<h1>未找到此单词</h1>"
+        if request.form['submit_button'] == '查找':
+            word = request.form['word']
+            # Check if word exists
+            if OMIGA_dictionary.sql("SELECT EXISTS(SELECT * FROM dictionary WHERE Word='{0}')".format(word)).fetchall()[0] == (True,):
+                # If yes, show the meaning of the word
+                meaning = OMIGA_dictionary.sql("SELECT Meaning FROM dictionary WHERE Word='{0}'".format(word)).df()['Meaning'][0]
+                text = '<h1>' + word + '</h1>' + repr(meaning)
+                text = text.replace('\\r\\n', '<br>')
+                text = text.replace("'", '')
+                text = '''<head>
+            <title>单词查询</title>
+        </head>
+                ''' + text
+                return text
+            else:
+                # If not, show error message
+                return "<h1>未找到此单词</h1>"
     return render_template('search-word-with-OMIGA.html', username=session.get('username', 'Guest'))
 
 @app.route('/words/search-word-with-meaning', methods=['GET', 'POST'])
@@ -88,25 +89,26 @@ def search_word_with_chinese():
         if request.form['submit_button'] == '登录':
             session['last_page'] = "/words/search-word-with-meaning"
             return redirect('/sign_in')
-        search_expresion = request.form['search']
-        possible_words = []
-        # Read ALL words from dataset
-        meanings = list(OMIGA_dictionary.sql("SELECT Meaning FROM dictionary").fetchall())
-        words = list(OMIGA_dictionary.sql("SELECT Word FROM dictionary").fetchall())
-        # Search
-        for word in words:
-            meaning = meanings[words.index(word)][0]
-            word = word[0]
-            if search_expresion in meaning:
-                possible_words.append(word)
-        result = ', '.join(possible_words)
-        # Check if possible words exists
-        if result != '':
-            # If yes, return the result
-                return "<h1>找到以下可能的单词</h1> <br> <h3>{0}</h3>".format(result)
-        if result == '':
-            # If not, show error message
-            return '<h1>未找到单词'
+        if request.form['submit_button'] == '查找':
+            search_expresion = request.form['search']
+            possible_words = []
+            # Read ALL words from dataset
+            meanings = list(OMIGA_dictionary.sql("SELECT Meaning FROM dictionary").fetchall())
+            words = list(OMIGA_dictionary.sql("SELECT Word FROM dictionary").fetchall())
+            # Search
+            for word in words:
+                meaning = meanings[words.index(word)][0]
+                word = word[0]
+                if search_expresion in meaning:
+                    possible_words.append(word)
+            result = ', '.join(possible_words)
+            # Check if possible words exists
+            if result != '':
+                # If yes, return the result
+                    return "<h1>找到以下可能的单词</h1> <br> <h3>{0}</h3>".format(result)
+            if result == '':
+                # If not, show error message
+                return '<h1>未找到单词'
     return render_template('search-word-with-meaning.html', username=session.get('username', 'Guest'))
 
 @app.route('/lessons', methods=['GET','POST'])
@@ -270,6 +272,7 @@ def view_passage(passage_id):
             session['last_page'] = "/discussion/view/{0}".format(passage_id)
             return redirect('/sign_in')
         if 'username' not in session:
+            session['last_page'] = "/discussion/view/{0}".format(passage_id)
             return redirect('/sign_in')
         comment = request.form['comment']
         discussion_database.sql("INSERT INTO comment (Id, TopicId, Content, CreatedTime, Username) VALUES (nextval('comment_seq_id'), '{0}', '{1}', CURRENT_TIMESTAMP::STRING, '{2}')".format(passage_id, comment, session['username']))
@@ -361,4 +364,5 @@ if __name__ == '__main__':
 
     ''')
     # Don't open debug mode because of duckdb database.
-    app.run(host='0.0.0.0',port='80', debug=False)
+    app.run(host='127.0.0.1',port='8080', debug=False)
+    # app.run(host='0.0.0.0',port=443, debug=False, ssl_context=('/Users/yuan/OMIGA-keys/fullchain.pem', '/Users/yuan/OMIGA-keys/privkey.pem'))
