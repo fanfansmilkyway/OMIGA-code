@@ -267,6 +267,8 @@ def discussion_create():
 
 @app.route('/discussion/view/<passage_id>', methods=['GET', 'POST'])
 def view_passage(passage_id):
+    if discussion_database.sql("SELECT EXISTS(SELECT * FROM topic WHERE Id='{0}')".format(passage_id)).fetchall()[0] == (False,):
+            return "<h1>未找到此文章(ID={0})</h1>".format(passage_id)
     if request.method == 'POST':
         if request.form['submit_button'] == '登录':
             session['last_page'] = "/discussion/view/{0}".format(passage_id)
@@ -282,7 +284,8 @@ def view_passage(passage_id):
     user = discussion_database.sql("SELECT Username FROM topic WHERE Id={0}".format(passage_id)).fetchone()[0]
     id = discussion_database.sql("SELECT Id FROM topic WHERE Id={0}".format(passage_id)).fetchone()[0]
     comments = discussion_database.sql("SELECT * EXCLUDE (Id,TopicId) FROM comment WHERE TopicId={0}".format(passage_id)).fetchall()
-    return render_template('discussion-view.html', title=title, content=content, user=user, time=time, id=id, comments=comments, username=session.get('username', 'Guest'))   
+    comment_number = len(comments)
+    return render_template('discussion-view.html', title=title, content=content, user=user, time=time, id=id, comments=comments, comment_number=comment_number, username=session.get('username', 'Guest'))   
 
 @app.route('/sign_up', methods=['GET','POST'])
 def sign_up():
@@ -358,11 +361,10 @@ if __name__ == '__main__':
     print('''                             
    ___  __  __ ___ ____    _            
   / _ \|  \/  |_ _/ ___|  / \     
- | | | | |\/| || | |  _  / _ \      Version: BETA3.2
+ | | | | |\/| || | |  _  / _ \      Version: BETA3.3
  | |_| | |  | || | |_| |/ ___ \     Contributor: Fanfansmilyway, Fkpwolf
-  \___/|_|  |_|___\____/_/   \_\    Date: 2023/10/27
+  \___/|_|  |_|___\____/_/   \_\    Date: 2023/11/3
 
     ''')
     # Don't open debug mode because of duckdb database.
     app.run(host='127.0.0.1',port='8080', debug=False)
-    # app.run(host='0.0.0.0',port=443, debug=False, ssl_context=('/Users/yuan/OMIGA-keys/fullchain.pem', '/Users/yuan/OMIGA-keys/privkey.pem'))
