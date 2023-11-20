@@ -1,22 +1,24 @@
 # Built-in modules
 import os
 # Need to install(not built-in)
-from flask import Flask, request, render_template, redirect, session, url_for
+from flask import Flask, request, render_template, redirect, session
 import duckdb
 
-# Environment Variables
+# Set Environment Variables
 DATABASE = os.environ['DATABASE_DIR'] # 'user data' folder's location
 CONTENT = os.environ['CONTENT_DIR'] # 'content' folder's location
 
 app = Flask(__name__, template_folder='{0}/templates'.format(CONTENT), static_folder='{0}/static'.format(CONTENT))
 app.secret_key = 'q776NkmVYq3vjZwaJn9drw'
 
-# Database
+# Connect to the databases
 OMIGA_dictionary = duckdb.connect('{0}/dictionary.db'.format(DATABASE))
+# Useful command: scp -r yuan@omiga.org:/home/yuan/myproject/database/dictionary.db /Users/yuan/database/dictionary.db
+# Remember to do CHECKPOINT before download
 discussion_database = duckdb.connect("{0}/discussion.db".format(DATABASE))
 con = duckdb.connect("{0}/userdata.db".format(DATABASE))
 
-# Create database if it not exists
+# Create tables if it doesn't exist
 con.sql("CREATE TABLE IF NOT EXISTS users(Id int primary key, Name varchar, Password varchar, Number varchar)")
 con.sql("CREATE SEQUENCE IF NOT EXISTS seq_id START 1")
 OMIGA_dictionary.sql("CREATE TABLE IF NOT EXISTS dictionary(Id int primary key, Word varchar(255), Meaning varchar(255))")
@@ -26,7 +28,7 @@ discussion_database.sql("CREATE TABLE IF NOT EXISTS comment(Id int primary key, 
 discussion_database.sql("CREATE SEQUENCE IF NOT EXISTS topic_seq_id START 1")
 discussion_database.sql("CREATE SEQUENCE IF NOT EXISTS comment_seq_id START 1")
 
-# Main pgae
+# Main page
 @app.route('/', methods=['GET','POST'])
 def index():
     if request.method == 'POST':
@@ -53,11 +55,28 @@ def words():
             for k in all_words:
                 text = text + k + ", "
             return text
-        
+
     # Count the words in the dictionary
     rows = OMIGA_dictionary.sql("SELECT COUNT(*) FROM dictionary").fetchall()[0][0]
     return render_template('words.html', rows=rows, username=session.get('username', 'Guest'))
-    
+
+@app.route('/words/<word>', methods=['GET', 'POST'])
+def view_word(word):
+    if OMIGA_dictionary.sql("SELECT EXISTS(SELECT * FROM dictionary WHERE Word='{0}')".format(word)).fetchall()[0] == (True,):
+        # If yes, show the meaning of the word
+        meaning = OMIGA_dictionary.sql("SELECT Meaning FROM dictionary WHERE Word='{0}'".format(word)).df()['Meaning'][0]
+        text = '<h1>' + word + '</h1>' + repr(meaning)
+        text = text.replace('\\r\\n', '<br>')
+        text = text.replace("'", '')
+        text = '''<head>
+            <title>单词查询</title>
+        </head>
+        ''' + text
+        return render_template('word-view.html', title=word, content=meaning)
+    else:
+        # If not, show error message
+        return "<h1>未找到此单词</h1>"
+
 @app.route('/words/search-word-with-OMIGA', methods=['GET', 'POST'])
 def search_word_with_OMIGA():
     if request.method == 'POST':
@@ -66,21 +85,7 @@ def search_word_with_OMIGA():
             return redirect('/sign_in')
         if request.form['submit_button'] == '查找':
             word = request.form['word']
-            # Check if word exists
-            if OMIGA_dictionary.sql("SELECT EXISTS(SELECT * FROM dictionary WHERE Word='{0}')".format(word)).fetchall()[0] == (True,):
-                # If yes, show the meaning of the word
-                meaning = OMIGA_dictionary.sql("SELECT Meaning FROM dictionary WHERE Word='{0}'".format(word)).df()['Meaning'][0]
-                text = '<h1>' + word + '</h1>' + repr(meaning)
-                text = text.replace('\\r\\n', '<br>')
-                text = text.replace("'", '')
-                text = '''<head>
-            <title>单词查询</title>
-        </head>
-                ''' + text
-                return text
-            else:
-                # If not, show error message
-                return "<h1>未找到此单词</h1>"
+            return redirect('/words/{0}'.format(word))
     return render_template('search-word-with-OMIGA.html', username=session.get('username', 'Guest'))
 
 @app.route('/words/search-word-with-meaning', methods=['GET', 'POST'])
@@ -101,12 +106,11 @@ def search_word_with_chinese():
                 word = word[0]
                 if search_expresion in meaning:
                     possible_words.append(word)
-            result = ', '.join(possible_words)
             # Check if possible words exists
-            if result != '':
+            if len(possible_words) != 0:
                 # If yes, return the result
-                    return "<h1>找到以下可能的单词</h1> <br> <h3>{0}</h3>".format(result)
-            if result == '':
+                return render_template('search-word-with-meaning-view.html', possible_words=possible_words)
+            else:
                 # If not, show error message
                 return '<h1>未找到单词'
     return render_template('search-word-with-meaning.html', username=session.get('username', 'Guest'))
@@ -233,10 +237,10 @@ def editing():
             # Check if the content is empty
             if edited_content == '':
                 return '<h1>不能添加空的单词！！</h1>'
+            # Update the dictionary
             OMIGA_dictionary.sql("UPDATE dictionary SET Meaning='{0}' WHERE Word='{1}'".format(edited_content, session['word']))
-            # Push dataset to github
             return '<h1>成功修改单词</h1>'
-        if request.form['submit_button'] == '删除此单词':
+        if request.form['submit_button'] == '删除此单词': # Delete this word
             OMIGA_dictionary.sql("DELETE FROM dictionary WHERE Word='{0}'".format(session['word']))
             return "<h1>成功删除此单词</h1>"
     return render_template('editing.html', word=session['word'], content=content, username=session.get('username', 'Guest'))
@@ -261,6 +265,11 @@ def discussion_create():
     if request.method == 'POST':
         title = request.form['title']
         content = request.form['content']
+        if content == '':
+            return "<h1>不可发表没有内容的文章</h1>"
+        if title == '':
+            return "<h1>不可发表没有标题的文章</h1>"
+        # TODO Bug: Error when Content contain quotation marks(')
         discussion_database.sql("INSERT INTO topic (Id, Title, Content, CreatedTime, Username) VALUES (nextval('topic_seq_id'), '{0}', '{1}', CURRENT_TIMESTAMP::STRING, '{2}')".format(title, content, session['username']))
         return redirect('/discussion')
     return render_template('discussion-create.html', username=session.get('username', 'Guest'))
@@ -332,7 +341,8 @@ def sign_in():
             return '<h1>成功退出账户</h1>'
 
     return render_template('sign_in.html', username=session.get('username', 'Guest'))
-            
+
+# TODO Improve this page OR delete this page because it's useless
 @app.route('/users', methods=['GET','POST'])
 def users():
     # Check if the user sign in
@@ -352,19 +362,25 @@ def users():
 
     return render_template('users.html', user_name=session['username'], num=number, username=session.get('username', 'Guest'))
 
+# Redirect to 404NotFound Page if the user accesses to non-existent URL
 @app.errorhandler(404)
 def page_not_found(error):
     return render_template('404NotFound.html'), 404
 
-# Run!!!!!
 if __name__ == '__main__':
+    # Print current version
+    # Remember chanage the Version number when you update a new version.
     print('''                             
    ___  __  __ ___ ____    _            
   / _ \|  \/  |_ _/ ___|  / \     
- | | | | |\/| || | |  _  / _ \      Version: BETA3.3
+ | | | | |\/| || | |  _  / _ \      Version: BETA3.4
  | |_| | |  | || | |_| |/ ___ \     Contributor: Fanfansmilyway, Fkpwolf
-  \___/|_|  |_|___\____/_/   \_\    Date: 2023/11/3
+  \___/|_|  |_|___\____/_/   \_\    Date: 2023/11/20
 
     ''')
     # Don't open debug mode because of duckdb database.
+    # Connect to Nginx Proxy
     app.run(host='127.0.0.1',port='8080', debug=False)
+
+# My email: fanfansmilkyway@qq.com / fanfansmilkyway@gmail.com
+# My website: omiga.org
